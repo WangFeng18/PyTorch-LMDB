@@ -32,6 +32,8 @@ class ImageFolderLMDB(data.Dataset):
             self.length = 50000
         else:
             raise NotImplementedError
+        self.transform = transform
+        self.target_transform = target_transform
 	
     def _init_db(self):
         self.env = lmdb.open(self.db_path, subdir=os.path.isdir(self.db_path),
