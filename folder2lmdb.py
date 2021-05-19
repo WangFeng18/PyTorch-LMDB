@@ -19,11 +19,23 @@ from torchvision import transforms, datasets
 # This segfaults when imported before torch: https://github.com/apache/arrow/issues/2637
 import pyarrow as pa
 
-
 class ImageFolderLMDB(data.Dataset):
     def __init__(self, db_path, transform=None, target_transform=None):
-        self.db_path = db_path
-        self.env = lmdb.open(db_path, subdir=os.path.isdir(db_path),
+        # https://github.com/chainer/chainermn/issues/129
+	# Delay loading LMDB data until after initialization to avoid "can't pickle Environment Object error"
+        self.env = None
+	
+	# Workaround to have length from the start for ImageNet since we don't have LMDB at initialization time
+	if 'train' in self.db_path:
+            self.length = 1281167
+        elif 'val' in self.db_path:
+            self.length = 50000
+        else:
+            raise NotImplementedError
+	...
+	
+    def _init_db(self):
+        self.env = lmdb.open(self.db_path, subdir=os.path.isdir(self.db_path),
                              readonly=True, lock=False,
                              readahead=False, meminit=False)
         with self.env.begin(write=False) as txn:
@@ -31,10 +43,11 @@ class ImageFolderLMDB(data.Dataset):
             self.length = pa.deserialize(txn.get(b'__len__'))
             self.keys = pa.deserialize(txn.get(b'__keys__'))
 
-        self.transform = transform
-        self.target_transform = target_transform
-
     def __getitem__(self, index):
+        # Delay loading LMDB data until after initialization: https://github.com/chainer/chainermn/issues/129
+        if self.env is None:
+            self._init_db()
+
         img, target = None, None
         env = self.env
         with env.begin(write=False) as txn:
