@@ -25,24 +25,23 @@ class ImageFolderLMDB(data.Dataset):
 	# Delay loading LMDB data until after initialization to avoid "can't pickle Environment Object error"
         self.env = None
 	
-	# Workaround to have length from the start for ImageNet since we don't have LMDB at initialization time
-	if 'train' in self.db_path:
+        # Workaround to have length from the start for ImageNet since we don't have LMDB at initialization time
+        if 'train' in self.db_path:
             self.length = 1281167
         elif 'val' in self.db_path:
             self.length = 50000
         else:
             raise NotImplementedError
-	...
 	
     def _init_db(self):
         self.env = lmdb.open(self.db_path, subdir=os.path.isdir(self.db_path),
-                             readonly=True, lock=False,
-                             readahead=False, meminit=False)
+                            readonly=True, lock=False,
+                            readahead=False, meminit=False)
         with self.env.begin(write=False) as txn:
             # self.length = txn.stat()['entries'] - 1
             self.length = pa.deserialize(txn.get(b'__len__'))
             self.keys = pa.deserialize(txn.get(b'__keys__'))
-
+    
     def __getitem__(self, index):
         # Delay loading LMDB data until after initialization: https://github.com/chainer/chainermn/issues/129
         if self.env is None:
